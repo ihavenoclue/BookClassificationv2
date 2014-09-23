@@ -10,7 +10,7 @@ from functools import reduce
 from bs4 import BeautifulSoup
 import string
 import numpy as np
-import functions
+import functions #own package defined in another python file "functions.py"
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
@@ -36,6 +36,8 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
     os.chdir(pathi)
     #Loop on all books from that directory
     for bookName in books:
+
+        #Open the epub book as an object thanks to the epub package
         book = epub.open_epub(bookName)
         
         #Get all chapters "names" from the book
@@ -45,13 +47,19 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
         bookFeaturesi=[]
         #Loop on the chapter in current book
         for ch in chapterNames:
-            
+
+            #Read the chapter from epub file as a string
             text = book.read_item(ch).decode("utf-8")
+            
+            #Convert to BS text for html processing
             soup = BeautifulSoup(text)
+
+            #Remove all the html tags from the string
             for tag in soup.find_all('strong'):
                 tag.replaceWith('')
             text1=soup.get_text()
-            
+
+            #If only one sentence or less, skip to next chapter
             if len(text1.split("."))==1:
                 print("Skipping "+ch+" in "+bookName)
                 print("Reason: only one sentence \""+text1)
