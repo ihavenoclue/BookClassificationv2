@@ -566,6 +566,23 @@ class AgentSpecial(Personne):
         chaîne"""
         return "Agent {0}, matricule {1}".format(self.nom,self.matricule)
 
+# To know if a class is a subclass from another one: returns True or False
+issubclass(AgentSpecial, Personne)
+
+# To know if an obect is an instance of the class OR one of his subclasses
+isinstance(agent, AgentSpecial) #True
+isinstance(agent, Personne) #True
+
+#Multiple heritage:
+
+class MaClasseHeritee(MaClasseMere1, MaClasseMere2): #We can put as many mother classes as we want
+
+#When looking for methods in the mother classes, python does so in the order of the classes defined above.
+#So MaClasseMere1, then all the mother classes of MaClasseMere1, then MaClasseMere2 etc..
+
+#For Exceptions, there is a hierarchy of classes as well. To know the hierarchy, just type help() on the error
+
+except TypeException #intercepts all exceptions of this type and the mother types
 ##############################################################
 ################# SORTING#####################################
 ##############################################################
