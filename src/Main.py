@@ -25,7 +25,11 @@ minstring=50
 #Final table with all features from all books. This will be the input for the training
 allFeatures=[]
 
-path='C:/Users/Andre/Dropbox/Books/'
+#path='C:/Users/Andre/Dropbox/Books/'
+path='C:/Users/lsaloumi/Dropbox/Books/'
+
+#Authors available for training
+authorList=[pathi.split("/")[-1] for pathi in [x[0] for x in os.walk(path)][1:]]
 
 #Loop through all the folders present in path
 for pathi in [x[0] for x in os.walk(path)][1:]:
@@ -53,12 +57,12 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
             
             #Convert to BS text for html processing
             soup = BeautifulSoup(text)
-
+            
             #Remove all the html tags from the string
             for tag in soup.find_all('strong'):
                 tag.replaceWith('')
             text1=soup.get_text()
-
+            
             #If only one sentence or less, skip to next chapter
             if len(text1.split("."))==1:
                 print("Skipping "+ch+" in "+bookName)
@@ -94,7 +98,7 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
             
             wordlist=tmp2.split()
             uniquelist=list(set(wordlist))
-            #Feature3: aveage number of unique words "per word" 
+            #Feature3: average number of unique words "per word" 
             avgDifWords=round(len(uniquelist)/len(wordlist),4)
             
             bookFeaturesi.append([avgSentLength,varSentLength,avgDifWords,len(tmp)])
@@ -106,6 +110,8 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
 ############################################################################################
 ###################### VISUALIZE DATA / CHECK INCONSISTENCIES ##############################
 ############################################################################################
+
+#Compare features for 2 books
 
 x1=[row[0] for row in allFeatures[1][1]]
 y1=[row[1] for row in allFeatures[1][1]]
@@ -122,7 +128,18 @@ plt.scatter(x1,z1,color="red")
 plt.scatter(x2,z2,color="blue")
 plt.show()
 
+#Compare features for all books of 2 authors
+author1=0
+author2=4
 
+X,Y,Z=[],[],[]
+for author in [0,1,2,3,4]: #add 1:len(authorList) here in python language
+    X.append([row[0] for row in reduce(lambda x,y: x+y,allFeatures[author])])
+    Y.append([row[1] for row in reduce(lambda x,y: x+y,allFeatures[author])])
+    Z.append([row[2] for row in reduce(lambda x,y: x+y,allFeatures[author])])
 
+plt.scatter(X[author1],Y[author1],color="red")
+plt.scatter(X[author2],Y[author2],color="blue")
+plt.show()
 
 
