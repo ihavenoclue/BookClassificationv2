@@ -17,6 +17,14 @@ def stddv(mylist):
     stddv=math.sqrt(stddv/(len(mylist)-1))
     return stddv
 
+def cumulative_sum(L):
+    CL = []
+    csum = 0
+    for x in L:
+        csum += x
+        CL.append(csum)
+    return CL
+
 def cleanup(mystring):
     '''This cleans up leading strings from an epub string if an expression is repeated twice in the same configuration in the beginning.
         For example, if myword="Chapter ", "Chapter I. ChapterI." or "Chapter IChapter I" will be removed because the same pattern with myword is repeated twice.

@@ -9,7 +9,7 @@ import os
 from functools import reduce
 from bs4 import BeautifulSoup
 import string
-import numpy as np
+from numpy import arange,array,ones,linalg
 import functions #own package defined in another python file "functions.py"
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -20,13 +20,20 @@ from matplotlib import cm
 ###########################################################################
 
 #Define minimum number of characters in a string for it to be considered for training
-minstring=50
+minstring=300
+#Define number of common words wanted for training
+numComWords=20
+#path='C:/Users/Andre/Dropbox/Books/'
+path='C:/Users/lsaloumi/Dropbox/Books/'
 
 #Final table with all features from all books. This will be the input for the training
 allFeatures=[]
 
-#path='C:/Users/Andre/Dropbox/Books/'
-path='C:/Users/lsaloumi/Dropbox/Books/'
+#Extract most common words in english
+os.chdir(path)
+comWords = open("lemma.num")
+comWords = comWords.read().split("\n")[:-1]
+comWords =[row.split(" ")[2] for row in comWords][0:numComWords]
 
 #Authors available for training
 authorList=[pathi.split("/")[-1] for pathi in [x[0] for x in os.walk(path)][1:]]
@@ -81,11 +88,21 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
                 continue
             #text1 = text1.replace('\\', '')
             
-            ### EXTRACT CHAPTER FEATURES
+            ################################
+            ### EXTRACT CHAPTER FEATURES####
+            ################################
+            
+            ##Extract common word features
+            chFeatures=[word for word in comWords]
+            tmp2=text1.lower()
+            for c in string.punctuation:
+                tmp2= tmp2.replace(c,"")
+            tmp2=tmp2.split(" ")
+            
+            chFeatures=[tmp2.count(word)/len(tmp2) for word in comWords]
+            
             ## average sentence length
             tmp=text1.split(".")
-            
-            
             tmp=[len(sentence.split()) for sentence in tmp]
             #Feature1: average sentence length
             avgSentLength= round(reduce(lambda x, y: x + y, tmp) / len(tmp),2)
@@ -101,8 +118,8 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
             #Feature3: average number of unique words "per word" 
             avgDifWords=round(len(uniquelist)/len(wordlist),4)
             
-            bookFeaturesi.append([avgSentLength,varSentLength,avgDifWords,len(tmp)])
-        
+            #bookFeaturesi.append([avgSentLength,varSentLength,avgDifWords,len(tmp)])
+            bookFeaturesi.append(chFeatures)
         authorFeatures.append(bookFeaturesi)
     
     allFeatures.append(authorFeatures)
@@ -128,18 +145,63 @@ plt.scatter(x1,z1,color="red")
 plt.scatter(x2,z2,color="blue")
 plt.show()
 
-#Compare features for all books of 2 authors
+#Compare features for one author against all others
 author1=0
 author2=4
 
+#First 3 features
 X,Y,Z=[],[],[]
-for author in [0,1,2,3,4]: #add 1:len(authorList) here in python language
+
+for author in [i for i in range(len(authorList))]:
     X.append([row[0] for row in reduce(lambda x,y: x+y,allFeatures[author])])
     Y.append([row[1] for row in reduce(lambda x,y: x+y,allFeatures[author])])
     Z.append([row[2] for row in reduce(lambda x,y: x+y,allFeatures[author])])
 
+#XYZ[0] is the first feature for all authors. XYZ[0][0] represents is the 1st feature for the 1st author
+XYZ=[]   
+tmp=[]
+for j in [j for j in range(numComWords)]:
+    for author in [i for i in range(len(authorList))]:
+        tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
+    XYZ.append(tmp)
+    tmp=[]
+
+#XYZ[0] is all the features for the 1st author. XYZ[0][0] represents is the 1st feature for the 1st author
+XYZ=[]   
+tmp=[]
+for author in [i for i in range(len(authorList))]:
+    for j in [j for j in range(numComWords)]:
+        tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
+    XYZ.append(tmp)
+    tmp=[]
+
+plt.scatter(reduce(lambda x,y: x+y,[X[r] for r in range(len(authorList)) if r!=author1]),reduce(lambda x,y: x+y,[Y[r] for r in range(len(authorList)) if r!=author1]),color="blue")
+#plt.scatter(X[author2],Y[author2],color="blue")
 plt.scatter(X[author1],Y[author1],color="red")
-plt.scatter(X[author2],Y[author2],color="blue")
+
 plt.show()
 
+#################################################################
+###################### TRAIN MODEL ##############################
+#################################################################
+
+### Simple linear model
+lX=len(X[author1])
+lAll=len(reduce(lambda x,y: x+y,X))
+#xi = array(XYZ[author1][0]+reduce(lambda x,y: x+y,[XYZ[r][0] for r in range(len(authorList)) if r!=author1]))
+xi= array([reduce(lambda x,y: x+y, XYZ[r]) for r in range(numComWords)])
+A = np.vstack((xi, ones(lAll)))
+
+#Define index of features for each client
+indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
+y=list(ones(lAll))
+y[indexes[author1]:indexes[author1+1]]=np.zeros(indexes[author1+1]-indexes[author1])
+y=array(y)
+#y =array( list(ones(lX))+list(np.zeros(lAll-lX)))
+w = linalg.lstsq(A.T,y)[0] # obtaining the parameters
+
+# plotting the line
+line = w[0]*xi+w[1] # regression line
+plt.plot(xi,line,'r-',xi,y,'o')
+plt.show()
 
