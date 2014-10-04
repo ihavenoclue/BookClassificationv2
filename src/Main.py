@@ -9,10 +9,13 @@ import os
 from functools import reduce
 from bs4 import BeautifulSoup
 import string
+import numpy as np
 from numpy import arange,array,ones,linalg
 import functions #own package defined in another python file "functions.py"
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import math
+import random
 
 
 ###########################################################################
@@ -23,8 +26,8 @@ from matplotlib import cm
 minstring=300
 #Define number of common words wanted for training
 numComWords=20
-#path='C:/Users/Andre/Dropbox/Books/'
-path='C:/Users/lsaloumi/Dropbox/Books/'
+path='C:/Users/Andre/Dropbox/Books/'
+#path='C:/Users/lsaloumi/Dropbox/Books/'
 
 #Final table with all features from all books. This will be the input for the training
 allFeatures=[]
@@ -166,14 +169,17 @@ for j in [j for j in range(numComWords)]:
     XYZ.append(tmp)
     tmp=[]
 
-#XYZ[0] is all the features for the 1st author. XYZ[0][0] represents is the 1st feature for the 1st author
-XYZ=[]   
-tmp=[]
-for author in [i for i in range(len(authorList))]:
-    for j in [j for j in range(numComWords)]:
-        tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-    XYZ.append(tmp)
-    tmp=[]
+
+#===============================================================================
+##XYZ[0] is all the features for the 1st author. XYZ[0][0] represents is the 1st feature for the 1st author
+# XYZ=[]   
+# tmp=[]
+# for author in [i for i in range(len(authorList))]:
+#     for j in [j for j in range(numComWords)]:
+#         tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
+#     XYZ.append(tmp)
+#     tmp=[]
+#===============================================================================
 
 plt.scatter(reduce(lambda x,y: x+y,[X[r] for r in range(len(authorList)) if r!=author1]),reduce(lambda x,y: x+y,[Y[r] for r in range(len(authorList)) if r!=author1]),color="blue")
 #plt.scatter(X[author2],Y[author2],color="blue")
@@ -185,23 +191,40 @@ plt.show()
 ###################### TRAIN MODEL ##############################
 #################################################################
 
-### Simple linear model
-lX=len(X[author1])
-lAll=len(reduce(lambda x,y: x+y,X))
-#xi = array(XYZ[author1][0]+reduce(lambda x,y: x+y,[XYZ[r][0] for r in range(len(authorList)) if r!=author1]))
-xi= array([reduce(lambda x,y: x+y, XYZ[r]) for r in range(numComWords)])
-A = np.vstack((xi, ones(lAll)))
-
-#Define index of features for each client
+#############################
+### Simple linear model #####
+#############################
+#Vectors of error for each author "isolation"
+Ein=[]
+Eout=[]
+#Define index of training points (chapters) for each client
 indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
-y=list(ones(lAll))
-y[indexes[author1]:indexes[author1+1]]=np.zeros(indexes[author1+1]-indexes[author1])
-y=array(y)
-#y =array( list(ones(lX))+list(np.zeros(lAll-lX)))
-w = linalg.lstsq(A.T,y)[0] # obtaining the parameters
+#Total number of training points (all authors)
+lAll=indexes[-1]
 
-# plotting the line
-line = w[0]*xi+w[1] # regression line
-plt.plot(xi,line,'r-',xi,y,'o')
-plt.show()
+for author1 in range(len(authorList)):
+    
+    #Create shuffle index to create validation sets
+    shuffled=list(range(lAll))
+    random.shuffle(shuffled)
+    #Number of training points for the isolated author
+    lX=indexes[author1 + 1]
+    
+    #X matrix for the linear regression ( X[0[] is the feature value for all training points)
+    xi= array([reduce(lambda x,y: x+y, XYZ[r]) for r in range(numComWords)])
+    A = np.vstack((xi, ones(lAll)))
+    
+    #Y vector where training points for the isolated author are set to 0
+    y=list(ones(lAll))
+    y[indexes[author1]:indexes[author1+1]]=[-1 for i in range(indexes[author1+1]-indexes[author1])]
+    y=array(y)
+    
+    #Get linear regression coefficients
+    w = linalg.lstsq(A.T,y)[0] # obtaining the parameters
+    
+    #Derive Ein for the author
+    ystar=[np.dot(A.T[i],w.T) for i in range(lAll)]
+    error=[elem/math.fabs(elem) for elem in ystar ]+y
+    
+    Ein.append(len([1 for i in error if i==0])/lAll)
 
