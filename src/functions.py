@@ -25,6 +25,11 @@ def cumulative_sum(L):
         CL.append(csum)
     return CL
 
+def chunks(list, n):
+    if n < 1:
+        n = 1
+    return [list[i:i + n] for i in range(0, len(list), n)]
+
 def cleanup(mystring):
     '''This cleans up leading strings from an epub string if an expression is repeated twice in the same configuration in the beginning.
         For example, if myword="Chapter ", "Chapter I. ChapterI." or "Chapter IChapter I" will be removed because the same pattern with myword is repeated twice.

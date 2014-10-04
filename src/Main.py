@@ -197,6 +197,8 @@ plt.show()
 #Vectors of error for each author "isolation"
 Ein=[]
 Eout=[]
+#how many buckets do we want to separate the data in for validation ?
+nbuckets=10
 #Define index of training points (chapters) for each client
 indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
 #Total number of training points (all authors)
@@ -207,6 +209,7 @@ for author1 in range(len(authorList)):
     #Create shuffle index to create validation sets
     shuffled=list(range(lAll))
     random.shuffle(shuffled)
+    shuffled=functions.chunks(shuffled,math.ceil(lAll/nbuckets))
     #Number of training points for the isolated author
     lX=indexes[author1 + 1]
     
@@ -219,12 +222,32 @@ for author1 in range(len(authorList)):
     y[indexes[author1]:indexes[author1+1]]=[-1 for i in range(indexes[author1+1]-indexes[author1])]
     y=array(y)
     
+    
+    #Derive Eout for our model
+    ierror=[]
+    for bucket in range(len(shuffled)):
+        restindex=[i for i in range(lAll) if i not in shuffled[bucket]]
+        Atest=A.T[restindex]
+        ytest=y[restindex]
+        wtest = linalg.lstsq(Atest,ytest)[0]
+        
+        Aval=A.T[shuffled[bucket]]
+        yval=y[shuffled[bucket]]
+        ystar=np.dot(Aval,wtest.T)
+        ydiff=[elem/math.fabs(elem) for elem in ystar ]+yval
+        ierror.append(len([1 for i in ydiff if i==0])/len(shuffled[bucket]))
+    Eout.append(np.mean(ierror))
+        
+        
     #Get linear regression coefficients
     w = linalg.lstsq(A.T,y)[0] # obtaining the parameters
     
     #Derive Ein for the author
-    ystar=[np.dot(A.T[i],w.T) for i in range(lAll)]
+    ystar=np.dot(A.T,w.T)
     error=[elem/math.fabs(elem) for elem in ystar ]+y
     
     Ein.append(len([1 for i in error if i==0])/lAll)
+
+Ein
+Eout
 
