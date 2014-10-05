@@ -166,14 +166,14 @@ for j in [j for j in range(numComWords)]:
     XYZ.append(tmp)
     tmp=[]
 
-#XYZ[0] is all the features for the 1st author. XYZ[0][0] represents is the 1st feature for the 1st author
-XYZ=[]   
-tmp=[]
-for author in [i for i in range(len(authorList))]:
-    for j in [j for j in range(numComWords)]:
-        tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-    XYZ.append(tmp)
-    tmp=[]
+##XYZ[0] is all the features for the 1st author. XYZ[0][0] represents is the 1st feature for the 1st author
+# XYZ=[]   
+# tmp=[]
+# for author in [i for i in range(len(authorList))]:
+#     for j in [j for j in range(numComWords)]:
+#         tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
+#     XYZ.append(tmp)
+#     tmp=[]
 
 plt.scatter(reduce(lambda x,y: x+y,[X[r] for r in range(len(authorList)) if r!=author1]),reduce(lambda x,y: x+y,[Y[r] for r in range(len(authorList)) if r!=author1]),color="blue")
 #plt.scatter(X[author2],Y[author2],color="blue")
