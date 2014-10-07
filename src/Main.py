@@ -16,16 +16,19 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import math
 import random
-
+from sklearn import svm
+#import scipy
 
 ###########################################################################
 ###################### IMPORT AND CLEAN DATA ##############################
 ###########################################################################
 
+#for numComWords in [10,50,100,200,400,600,800]:
+
 #Define minimum number of characters in a string for it to be considered for training
 minstring=300
 #Define number of common words wanted for training
-numComWords=20
+numComWords=200
 path='C:/Users/Andre/Dropbox/Books/'
 #path='C:/Users/lsaloumi/Dropbox/Books/'
 
@@ -75,8 +78,8 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
             
             #If only one sentence or less, skip to next chapter
             if len(text1.split("."))==1:
-                print("Skipping "+ch+" in "+bookName)
-                print("Reason: only one sentence \""+text1)
+                #print("Skipping "+ch+" in "+bookName)
+                #print("Reason: only one sentence \""+text1)
                 continue
             
             #Delete the first Chapter strings that are annoying
@@ -87,7 +90,7 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
             
             #If string is too short, don't consider it for training
             if len(text1)<minstring:
-                print("Skipping "+ch+" in "+bookName+ " : less than "+str(minstring)+" characters \""+text1+"\"")
+                #print("Skipping "+ch+" in "+bookName+ " : less than "+str(minstring)+" characters \""+text1+"\"")
                 continue
             #text1 = text1.replace('\\', '')
             
@@ -141,12 +144,12 @@ x2=[row[0] for row in allFeatures[2][1]]
 y2=[row[1] for row in allFeatures[2][1]]
 z2=[row[2] for row in allFeatures[2][1]]
 
-plt.scatter(x1,y1,color="red")
-plt.scatter(x2,y2,color="blue")
-
-plt.scatter(x1,z1,color="red")
-plt.scatter(x2,z2,color="blue")
-plt.show()
+# plt.scatter(x1,y1,color="red")
+# plt.scatter(x2,y2,color="blue")
+# 
+# plt.scatter(x1,z1,color="red")
+# plt.scatter(x2,z2,color="blue")
+# plt.show()
 
 #Compare features for one author against all others
 author1=0
@@ -181,11 +184,9 @@ for j in [j for j in range(numComWords)]:
 #     tmp=[]
 #===============================================================================
 
-plt.scatter(reduce(lambda x,y: x+y,[X[r] for r in range(len(authorList)) if r!=author1]),reduce(lambda x,y: x+y,[Y[r] for r in range(len(authorList)) if r!=author1]),color="blue")
-#plt.scatter(X[author2],Y[author2],color="blue")
-plt.scatter(X[author1],Y[author1],color="red")
-
-plt.show()
+# plt.scatter(reduce(lambda x,y: x+y,[X[r] for r in range(len(authorList)) if r!=author1]),reduce(lambda x,y: x+y,[Y[r] for r in range(len(authorList)) if r!=author1]),color="blue")
+# plt.scatter(X[author1],Y[author1],color="red")
+# plt.show()
 
 #################################################################
 ###################### TRAIN MODEL ##############################
@@ -194,15 +195,17 @@ plt.show()
 #############################
 ### Simple linear model #####
 #############################
+
 #Vectors of error for each author "isolation"
 Ein=[]
 Eout=[]
 #how many buckets do we want to separate the data in for validation ?
-nbuckets=10
+nbuckets=20
 #Define index of training points (chapters) for each client
 indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
 #Total number of training points (all authors)
 lAll=indexes[-1]
+
 
 for author1 in range(len(authorList)):
     
@@ -248,6 +251,70 @@ for author1 in range(len(authorList)):
     
     Ein.append(len([1 for i in error if i==0])/lAll)
 
-Ein
-Eout
+print("Number of features used: ",numComWords)
+#print("Ein=",[round(elem,5) for elem in Ein])
+print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
+
+################################
+### Support Vector machine #####
+################################
+
+#Vectors of error for each author "isolation"
+Ein=[]
+Eout=[]
+#how many buckets do we want to separate the data in for validation ?
+nbuckets=20
+#Define index of training points (chapters) for each client
+indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
+#Total number of training points (all authors)
+lAll=indexes[-1]
+
+
+for author1 in range(len(authorList)):
+    
+    #Create shuffle index to create validation sets
+    shuffled=list(range(lAll))
+    random.shuffle(shuffled)
+    shuffled=functions.chunks(shuffled,math.ceil(lAll/nbuckets))
+    #Number of training points for the isolated author
+    lX=indexes[author1 + 1]
+    
+    #X matrix for the linear regression ( X[0[] is the feature value for all training points)
+    x= array([reduce(lambda x,y: x+y, XYZ[r]) for r in range(numComWords)])
+    
+    #Y vector where training points for the isolated author are set to 0
+    y=list(ones(lAll))
+    y[indexes[author1]:indexes[author1+1]]=[-1 for i in range(indexes[author1+1]-indexes[author1])]
+    y=array(y)
+    #Derive Eout for our model
+    ierror=[]
+    for bucket in range(len(shuffled)):
+        restindex=[i for i in range(lAll) if i not in shuffled[bucket]]
+        xtest=x.T[restindex]
+        ytest=y[restindex]
+        clf = svm.SVC()
+        tmp=clf.fit(xtest,ytest)
+        
+        xval=x.T[shuffled[bucket]]
+        yval=y[shuffled[bucket]]
+        ystar=clf.predict(xval)
+        ydiff=[elem/math.fabs(elem) for elem in ystar ]+yval
+        ierror.append(len([1 for i in ydiff if i==0])/len(shuffled[bucket]))
+    Eout.append(np.mean(ierror))
+    
+    
+    #Derive Ein for the author
+    clf = svm.SVC()
+    tmp=clf.fit(x.T,y)
+    ystar=clf.predict(x.T)
+    error=[elem/math.fabs(elem) for elem in ystar ]+y
+    
+    Ein.append(len([1 for i in error if i==0])/lAll)
+    print("Author ",authorList[author1]," is done. ")
+
+print("Number of features used: ",numComWords)
+print("Ein=",[round(elem,5) for elem in Ein])
+print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
+
+
 
