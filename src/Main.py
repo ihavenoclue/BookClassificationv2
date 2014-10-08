@@ -22,30 +22,26 @@ from sklearn import svm
 ###########################################################################
 ###################### IMPORT AND CLEAN DATA ##############################
 ###########################################################################
-
-#for numComWords in [10,50,100,200,400,600,800]:
-
 #Define minimum number of characters in a string for it to be considered for training
 minstring=300
 #Define number of common words wanted for training
 numComWords=200
-path='C:/Users/Andre/Dropbox/Books/'
-#path='C:/Users/lsaloumi/Dropbox/Books/'
-
+path='C:/Users/Andre/Dropbox/Books/Training/'
+pathValidation='C:/Users/Andre/Dropbox/Books/Validation/'
+#path='C:/Users/lsaloumi/Dropbox/Books/Training'
 #Final table with all features from all books. This will be the input for the training
-allFeatures=[]
-
+trainFeatures=[]
+testFeatures=[]
 #Extract most common words in english
 os.chdir(path)
 comWords = open("lemma.num")
 comWords = comWords.read().split("\n")[:-1]
 comWords =[row.split(" ")[2] for row in comWords][0:numComWords]
-
 #Authors available for training
 authorList=[pathi.split("/")[-1] for pathi in [x[0] for x in os.walk(path)][1:]]
-
+testList=[pathi.split("/")[-1] for pathi in [x[0] for x in os.walk(pathValidation)][1:]]
 #Loop through all the folders present in path
-for pathi in [x[0] for x in os.walk(path)][1:]:
+for pathi in [x[0] for x in os.walk(path)][1:]+[x[0] for x in os.walk(pathValidation)][1:]:
     
     authorFeatures=[]
     #Get all epub books from the current directory
@@ -53,140 +49,44 @@ for pathi in [x[0] for x in os.walk(path)][1:]:
     os.chdir(pathi)
     #Loop on all books from that directory
     for bookName in books:
-
         #Open the epub book as an object thanks to the epub package
         book = epub.open_epub(bookName)
-        
         #Get all chapters "names" from the book
         chapterNames = [book.get_item(item_id).href for item_id, linear in book.opf.spine.itemrefs]
         chapterNames = [ch for ch in chapterNames if ch[:2]=='ch']
-        
         bookFeaturesi=[]
         #Loop on the chapter in current book
         for ch in chapterNames:
-
-            #Read the chapter from epub file as a string
-            text = book.read_item(ch).decode("utf-8")
-            
-            #Convert to BS text for html processing
-            soup = BeautifulSoup(text)
-            
-            #Remove all the html tags from the string
-            for tag in soup.find_all('strong'):
-                tag.replaceWith('')
-            text1=soup.get_text()
-            
-            #If only one sentence or less, skip to next chapter
-            if len(text1.split("."))==1:
-                #print("Skipping "+ch+" in "+bookName)
-                #print("Reason: only one sentence \""+text1)
+            tmp=functions.extractFeatures(book,ch,minstring,comWords)
+            if tmp==False:
                 continue
-            
-            #Delete the first Chapter strings that are annoying
-            text1=functions.cleanup(text1)
-            text1=functions.cleanup(text1)
-            
-            text1 = text1.replace('\n', ' ')
-            
-            #If string is too short, don't consider it for training
-            if len(text1)<minstring:
-                #print("Skipping "+ch+" in "+bookName+ " : less than "+str(minstring)+" characters \""+text1+"\"")
-                continue
-            #text1 = text1.replace('\\', '')
-            
-            ################################
-            ### EXTRACT CHAPTER FEATURES####
-            ################################
-            
-            ##Extract common word features
-            chFeatures=[word for word in comWords]
-            tmp2=text1.lower()
-            for c in string.punctuation:
-                tmp2= tmp2.replace(c,"")
-            tmp2=tmp2.split(" ")
-            
-            chFeatures=[tmp2.count(word)/len(tmp2) for word in comWords]
-            
-            ## average sentence length
-            tmp=text1.split(".")
-            tmp=[len(sentence.split()) for sentence in tmp]
-            #Feature1: average sentence length
-            avgSentLength= round(reduce(lambda x, y: x + y, tmp) / len(tmp),2)
-            #Feature2: sentence length standard deviation
-            varSentLength=round(functions.stddv(tmp),2)
-            
-            tmp2=text1.lower()
-            for c in string.punctuation:
-                tmp2= tmp2.replace(c,"")
-            
-            wordlist=tmp2.split()
-            uniquelist=list(set(wordlist))
-            #Feature3: average number of unique words "per word" 
-            avgDifWords=round(len(uniquelist)/len(wordlist),4)
-            
-            #bookFeaturesi.append([avgSentLength,varSentLength,avgDifWords,len(tmp)])
-            bookFeaturesi.append(chFeatures)
+            bookFeaturesi.append(tmp)
         authorFeatures.append(bookFeaturesi)
-    
-    allFeatures.append(authorFeatures)
+    if path in pathi:
+        trainFeatures.append(authorFeatures)
+    if pathValidation in pathi:
+        testFeatures.append(authorFeatures)
 
 ############################################################################################
 ###################### VISUALIZE DATA / CHECK INCONSISTENCIES ##############################
 ############################################################################################
 
-#Compare features for 2 books
-
-x1=[row[0] for row in allFeatures[1][1]]
-y1=[row[1] for row in allFeatures[1][1]]
-z1=[row[2] for row in allFeatures[1][1]]
-
-x2=[row[0] for row in allFeatures[2][1]]
-y2=[row[1] for row in allFeatures[2][1]]
-z2=[row[2] for row in allFeatures[2][1]]
-
-# plt.scatter(x1,y1,color="red")
-# plt.scatter(x2,y2,color="blue")
-# 
-# plt.scatter(x1,z1,color="red")
-# plt.scatter(x2,z2,color="blue")
-# plt.show()
-
-#Compare features for one author against all others
-author1=0
-author2=4
-
-#First 3 features
-X,Y,Z=[],[],[]
-
-for author in [i for i in range(len(authorList))]:
-    X.append([row[0] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-    Y.append([row[1] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-    Z.append([row[2] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-
-#XYZ[0] is the first feature for all authors. XYZ[0][0] represents is the 1st feature for the 1st author
-XYZ=[]   
+#trainMatrix[0] is the first feature for all authors. trainMatrix[0][0] represents is the 1st feature for the 1st author
+trainMatrix=[]   
 tmp=[]
 for j in [j for j in range(numComWords)]:
     for author in [i for i in range(len(authorList))]:
-        tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-    XYZ.append(tmp)
+        tmp.append([row[j] for row in reduce(lambda x,y: x+y,trainFeatures[author])])
+    trainMatrix.append(tmp)
     tmp=[]
 
-
-#===============================================================================
-##XYZ[0] is all the features for the 1st author. XYZ[0][0] represents is the 1st feature for the 1st author
-# XYZ=[]   
-# tmp=[]
-# for author in [i for i in range(len(authorList))]:
-#     for j in [j for j in range(numComWords)]:
-#         tmp.append([row[j] for row in reduce(lambda x,y: x+y,allFeatures[author])])
-#     XYZ.append(tmp)
-#     tmp=[]
-#===============================================================================
-
-# plt.scatter(reduce(lambda x,y: x+y,[X[r] for r in range(len(authorList)) if r!=author1]),reduce(lambda x,y: x+y,[Y[r] for r in range(len(authorList)) if r!=author1]),color="blue")
-# plt.scatter(X[author1],Y[author1],color="red")
-# plt.show()
+testMatrix=[]   
+tmp=[]
+for j in [j for j in range(numComWords)]:
+    for author in [i for i in range(len(testFeatures))]:
+        tmp.append([row[j] for row in reduce(lambda x,y: x+y,testFeatures[author])])
+    testMatrix.append(tmp)
+    tmp=[]
 
 #################################################################
 ###################### TRAIN MODEL ##############################
@@ -199,10 +99,12 @@ for j in [j for j in range(numComWords)]:
 #Vectors of error for each author "isolation"
 Ein=[]
 Eout=[]
+#list of linear regression model coefficients for each aithor vs all others
+W=[]
 #how many buckets do we want to separate the data in for validation ?
 nbuckets=20
 #Define index of training points (chapters) for each client
-indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
+indexes=[0]+functions.cumulative_sum([len(trainMatrix[0][r]) for r in range(len(authorList))])
 #Total number of training points (all authors)
 lAll=indexes[-1]
 
@@ -217,10 +119,10 @@ for author1 in range(len(authorList)):
     lX=indexes[author1 + 1]
     
     #X matrix for the linear regression ( X[0[] is the feature value for all training points)
-    xi= array([reduce(lambda x,y: x+y, XYZ[r]) for r in range(numComWords)])
+    xi= array([reduce(lambda x,y: x+y, trainMatrix[r]) for r in range(numComWords)])
     A = np.vstack((xi, ones(lAll)))
     
-    #Y vector where training points for the isolated author are set to 0
+    #Y vector where training points for the isolated author are set to -1
     y=list(ones(lAll))
     y[indexes[author1]:indexes[author1+1]]=[-1 for i in range(indexes[author1+1]-indexes[author1])]
     y=array(y)
@@ -244,16 +146,32 @@ for author1 in range(len(authorList)):
         
     #Get linear regression coefficients
     w = linalg.lstsq(A.T,y)[0] # obtaining the parameters
-    
+    W.append(w)
     #Derive Ein for the author
     ystar=np.dot(A.T,w.T)
     error=[elem/math.fabs(elem) for elem in ystar ]+y
     
     Ein.append(len([1 for i in error if i==0])/lAll)
+    
+
+#test our model
+for author1 in range(len(testList)):
+    xitest= array([reduce(lambda x,y: x+y, testMatrix[r]) for r in range(numComWords)])
+    Atest = np.vstack((xitest, ones(len(xitest.T))))
+    error=[]
+    for w in W:
+        ytest=np.dot(Atest.T,w.T)
+        error.append(sum([1 for i in ytest if i<0]))
+    print("Predicted author is ",authorList[error.index(max(error))])
+    print("Real author was",testList[author1])
+    print(error)
 
 print("Number of features used: ",numComWords)
 #print("Ein=",[round(elem,5) for elem in Ein])
 print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
+
+#Validation
+
 
 ################################
 ### Support Vector machine #####
@@ -265,7 +183,7 @@ Eout=[]
 #how many buckets do we want to separate the data in for validation ?
 nbuckets=20
 #Define index of training points (chapters) for each client
-indexes=[0]+functions.cumulative_sum([len(XYZ[0][r]) for r in range(len(authorList))])
+indexes=[0]+functions.cumulative_sum([len(trainMatrix[0][r]) for r in range(len(authorList))])
 #Total number of training points (all authors)
 lAll=indexes[-1]
 
@@ -280,7 +198,7 @@ for author1 in range(len(authorList)):
     lX=indexes[author1 + 1]
     
     #X matrix for the linear regression ( X[0[] is the feature value for all training points)
-    x= array([reduce(lambda x,y: x+y, XYZ[r]) for r in range(numComWords)])
+    x= array([reduce(lambda x,y: x+y, trainMatrix[r]) for r in range(numComWords)])
     
     #Y vector where training points for the isolated author are set to 0
     y=list(ones(lAll))
