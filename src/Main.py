@@ -16,6 +16,9 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import math
 import random
+from sklearn import metrics
+from sklearn import cross_validation
+from sklearn import datasets
 from sklearn import svm
 #import scipy
 
@@ -83,7 +86,7 @@ for j in [j for j in range(numComWords)]:
 testMatrix=[]   
 tmp=[]
 for j in [j for j in range(numComWords)]:
-    for author in [i for i in range(len(testFeatures))]:
+    for author in [i for i in range(len(testList))]:
         tmp.append([row[j] for row in reduce(lambda x,y: x+y,testFeatures[author])])
     testMatrix.append(tmp)
     tmp=[]
@@ -152,11 +155,18 @@ for author1 in range(len(authorList)):
     error=[elem/math.fabs(elem) for elem in ystar ]+y
     
     Ein.append(len([1 for i in error if i==0])/lAll)
-    
+
+print("Number of features used: ",numComWords)
+#print("Ein=",[round(elem,5) for elem in Ein])
+print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
 
 #test our model
+#Define index of training points (chapters) for each client
+indexestest=[0]+functions.cumulative_sum([len(testMatrix[0][r]) for r in range(len(testList))])
+
 for author1 in range(len(testList)):
-    xitest= array([reduce(lambda x,y: x+y, testMatrix[r]) for r in range(numComWords)])
+    xitest= array([reduce(lambda x,y: x+y, testMatrix[r]) for r in range(numComWords)]).T
+    xitest=xitest[indexestest[author1]:indexestest[author1+1]].T
     Atest = np.vstack((xitest, ones(len(xitest.T))))
     error=[]
     for w in W:
@@ -165,12 +175,6 @@ for author1 in range(len(testList)):
     print("Predicted author is ",authorList[error.index(max(error))])
     print("Real author was",testList[author1])
     print(error)
-
-print("Number of features used: ",numComWords)
-#print("Ein=",[round(elem,5) for elem in Ein])
-print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
-
-#Validation
 
 
 ################################
@@ -190,49 +194,42 @@ lAll=indexes[-1]
 
 for author1 in range(len(authorList)):
     
-    #Create shuffle index to create validation sets
-    shuffled=list(range(lAll))
-    random.shuffle(shuffled)
-    shuffled=functions.chunks(shuffled,math.ceil(lAll/nbuckets))
     #Number of training points for the isolated author
     lX=indexes[author1 + 1]
-    
     #X matrix for the linear regression ( X[0[] is the feature value for all training points)
     x= array([reduce(lambda x,y: x+y, trainMatrix[r]) for r in range(numComWords)])
-    
     #Y vector where training points for the isolated author are set to 0
     y=list(ones(lAll))
     y[indexes[author1]:indexes[author1+1]]=[-1 for i in range(indexes[author1+1]-indexes[author1])]
     y=array(y)
-    #Derive Eout for our model
-    ierror=[]
-    for bucket in range(len(shuffled)):
-        restindex=[i for i in range(lAll) if i not in shuffled[bucket]]
-        xtest=x.T[restindex]
-        ytest=y[restindex]
-        clf = svm.SVC()
-        tmp=clf.fit(xtest,ytest)
-        
-        xval=x.T[shuffled[bucket]]
-        yval=y[shuffled[bucket]]
-        ystar=clf.predict(xval)
-        ydiff=[elem/math.fabs(elem) for elem in ystar ]+yval
-        ierror.append(len([1 for i in ydiff if i==0])/len(shuffled[bucket]))
-    Eout.append(np.mean(ierror))
-    
-    
     #Derive Ein for the author
-    clf = svm.SVC()
+    clf = svm.SVC(C=100,kernel='linear')
+    scores = cross_validation.cross_val_score(estimator=clf, X=x.T, y=y,cv=cross_validation.StratifiedKFold(y,20,shuffle=True))
+    Eout.append(scores.mean())
     tmp=clf.fit(x.T,y)
-    ystar=clf.predict(x.T)
-    error=[elem/math.fabs(elem) for elem in ystar ]+y
-    
-    Ein.append(len([1 for i in error if i==0])/lAll)
+    Ein.append(clf.score(x.T, y))
     print("Author ",authorList[author1]," is done. ")
+
 
 print("Number of features used: ",numComWords)
 print("Ein=",[round(elem,5) for elem in Ein])
 print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
 
+param_grid = [
+  {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
+  {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf']},
+ ]
+
+#Multi-Classification
+
+X = [[0], [1], [2], [3]]
+Y = [0, 1, 2, 3]
+clf = svm.SVC()
+clf.fit(X, Y) 
+SVC(C=1.0, cache_size=200, class_weight=None, coef0=0.0, degree=3,
+gamma=0.0, kernel='rbf', max_iter=-1, probability=False, random_state=None,
+shrinking=True, tol=0.001, verbose=False)
+dec = clf.decision_function([[1]])
+dec.shape[1] # 4 classes: 4*3/2 = 6
 
 
