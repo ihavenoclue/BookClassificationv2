@@ -31,7 +31,8 @@ minstring=300
 numComWords=200
 path='C:/Users/Andre/Dropbox/Books/Training/'
 pathValidation='C:/Users/Andre/Dropbox/Books/Validation/'
-#path='C:/Users/lsaloumi/Dropbox/Books/Training'
+path='C:/Users/lsaloumi/Dropbox/Books/Training/'
+pathValidation='C:/Users/lsaloumi/Dropbox/Books/Validation/'
 #Final table with all features from all books. This will be the input for the training
 trainFeatures=[]
 testFeatures=[]
@@ -43,6 +44,8 @@ comWords =[row.split(" ")[2] for row in comWords][0:numComWords]
 #Authors available for training
 authorList=[pathi.split("/")[-1] for pathi in [x[0] for x in os.walk(path)][1:]]
 testList=[pathi.split("/")[-1] for pathi in [x[0] for x in os.walk(pathValidation)][1:]]
+nauthors=len(authorList)
+
 #Loop through all the folders present in path
 for pathi in [x[0] for x in os.walk(path)][1:]+[x[0] for x in os.walk(pathValidation)][1:]:
     
@@ -78,7 +81,7 @@ for pathi in [x[0] for x in os.walk(path)][1:]+[x[0] for x in os.walk(pathValida
 trainMatrix=[]   
 tmp=[]
 for j in [j for j in range(numComWords)]:
-    for author in [i for i in range(len(authorList))]:
+    for author in [i for i in range(nauthors)]:
         tmp.append([row[j] for row in reduce(lambda x,y: x+y,trainFeatures[author])])
     trainMatrix.append(tmp)
     tmp=[]
@@ -107,12 +110,12 @@ W=[]
 #how many buckets do we want to separate the data in for validation ?
 nbuckets=20
 #Define index of training points (chapters) for each client
-indexes=[0]+functions.cumulative_sum([len(trainMatrix[0][r]) for r in range(len(authorList))])
+indexes=[0]+functions.cumulative_sum([len(trainMatrix[0][r]) for r in range(nauthors)])
 #Total number of training points (all authors)
 lAll=indexes[-1]
 
 
-for author1 in range(len(authorList)):
+for author1 in range(nauthors):
     
     #Create shuffle index to create validation sets
     shuffled=list(range(lAll))
@@ -187,17 +190,17 @@ Eout=[]
 #how many buckets do we want to separate the data in for validation ?
 nbuckets=20
 #Define index of training points (chapters) for each client
-indexes=[0]+functions.cumulative_sum([len(trainMatrix[0][r]) for r in range(len(authorList))])
+indexes=[0]+functions.cumulative_sum([len(trainMatrix[0][r]) for r in range(nauthors)])
 #Total number of training points (all authors)
 lAll=indexes[-1]
 
+#X matrix for the linear regression ( X[0] is the feature value for all training points)
+x= array([reduce(lambda x,y: x+y, trainMatrix[r]) for r in range(numComWords)])
 
-for author1 in range(len(authorList)):
+for author1 in range(nauthors):
     
     #Number of training points for the isolated author
     lX=indexes[author1 + 1]
-    #X matrix for the linear regression ( X[0[] is the feature value for all training points)
-    x= array([reduce(lambda x,y: x+y, trainMatrix[r]) for r in range(numComWords)])
     #Y vector where training points for the isolated author are set to 0
     y=list(ones(lAll))
     y[indexes[author1]:indexes[author1+1]]=[-1 for i in range(indexes[author1+1]-indexes[author1])]
@@ -222,13 +225,11 @@ param_grid = [
 
 #Multi-Classification
 
-X = [[0], [1], [2], [3]]
-Y = [0, 1, 2, 3]
-clf = svm.SVC()
-clf.fit(X, Y) 
-SVC(C=1.0, cache_size=200, class_weight=None, coef0=0.0, degree=3,
-gamma=0.0, kernel='rbf', max_iter=-1, probability=False, random_state=None,
-shrinking=True, tol=0.001, verbose=False)
+X = x.T
+Y = np.repeat(list(range(nauthors)),[len(trainMatrix[0][r]) for r in range(nauthors)])
+clf = svm.SVC(C=100,kernel='linear')
+clf.fit(X, Y)
+
 dec = clf.decision_function([[1]])
 dec.shape[1] # 4 classes: 4*3/2 = 6
 
