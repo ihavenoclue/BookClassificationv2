@@ -17,9 +17,13 @@ from matplotlib import cm
 import math
 import random
 from sklearn import metrics
-from sklearn import cross_validation
 from sklearn import datasets
 from sklearn import svm
+from sklearn import cross_validation
+from sklearn.cross_validation import *
+from sklearn.grid_search import GridSearchCV
+from sklearn.metrics import classification_report
+from sklearn.svm import SVC
 #import scipy
 
 ###########################################################################
@@ -31,8 +35,8 @@ minstring=300
 numComWords=200
 path='C:/Users/Andre/Dropbox/Books/Training/'
 pathValidation='C:/Users/Andre/Dropbox/Books/Validation/'
-path='C:/Users/lsaloumi/Dropbox/Books/Training/'
-pathValidation='C:/Users/lsaloumi/Dropbox/Books/Validation/'
+#path='C:/Users/lsaloumi/Dropbox/Books/Training/'
+#pathValidation='C:/Users/lsaloumi/Dropbox/Books/Validation/'
 #Final table with all features from all books. This will be the input for the training
 trainFeatures=[]
 testFeatures=[]
@@ -72,6 +76,7 @@ for pathi in [x[0] for x in os.walk(path)][1:]+[x[0] for x in os.walk(pathValida
         trainFeatures.append(authorFeatures)
     if pathValidation in pathi:
         testFeatures.append(authorFeatures)
+        
 
 ############################################################################################
 ###################### VISUALIZE DATA / CHECK INCONSISTENCIES ##############################
@@ -93,6 +98,8 @@ for j in [j for j in range(numComWords)]:
         tmp.append([row[j] for row in reduce(lambda x,y: x+y,testFeatures[author])])
     testMatrix.append(tmp)
     tmp=[]
+
+
 
 #################################################################
 ###################### TRAIN MODEL ##############################
@@ -161,7 +168,8 @@ for author1 in range(nauthors):
 
 print("Number of features used: ",numComWords)
 #print("Ein=",[round(elem,5) for elem in Ein])
-print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
+print("Eout=",[1-math.ceil(elem*10000)/10000 for elem in Eout])
+print("mean(Eout)=",1-math.ceil(array(Eout).mean()*10000)/10000)
 
 #test our model
 #Define index of training points (chapters) for each client
@@ -197,6 +205,7 @@ lAll=indexes[-1]
 #X matrix for the linear regression ( X[0] is the feature value for all training points)
 x= array([reduce(lambda x,y: x+y, trainMatrix[r]) for r in range(numComWords)])
 
+
 for author1 in range(nauthors):
     
     #Number of training points for the isolated author
@@ -215,22 +224,63 @@ for author1 in range(nauthors):
 
 
 print("Number of features used: ",numComWords)
-print("Ein=",[round(elem,5) for elem in Ein])
+print("Ein=",[math.ceil(elem*10000)/10000 for elem in Ein])
 print("Eout=",[math.ceil(elem*10000)/10000 for elem in Eout])
 
-param_grid = [
-  {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
-  {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf']},
- ]
 
 #Multi-Classification
-
 X = x.T
 Y = np.repeat(list(range(nauthors)),[len(trainMatrix[0][r]) for r in range(nauthors)])
-clf = svm.SVC(C=100,kernel='linear')
+np.savetxt("C:/Users/Andre/Desktop/featuresmatrix.csv", X, delimiter=",")
+np.savetxt("C:/Users/Andre/Desktop/authors.csv", Y, delimiter=",")
+
+clf = svm.SVC(C=100,kernel='linear') #SVC uses a one-against-one classification system
+lin_clf=svm.LinearSVC(C=100) #linearSVC uses a one-against-all classification system
+scores = cross_validation.cross_val_score(estimator=clf, X=X, y=Y,cv=cross_validation.StratifiedKFold(y,20,shuffle=True))
+lin_scores = cross_validation.cross_val_score(estimator=lin_clf, X=X, y=Y,cv=cross_validation.StratifiedKFold(y,20,shuffle=True))
 clf.fit(X, Y)
-
-dec = clf.decision_function([[1]])
-dec.shape[1] # 4 classes: 4*3/2 = 6
+lin_clf.fit(X, Y)
 
 
+#parameter estimation using grid-search with cross-validation
+
+# Split the dataset in two equal parts
+X_train, X_test, y_train, y_test = train_test_split(
+    X, Y, test_size=0.1, random_state=0)
+
+# Set the parameters by cross-validation
+tuned_parameters = [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4],
+                     'C': [1, 10, 100, 1000,10000]},
+                    {'kernel': ['linear'], 'C': [1, 10, 100, 1000,10000,100000]},
+                     {'kernel': ['poly'], 'C': [100, 1000,10000,100000],'degree':[1,100]}]
+
+#scores = ['precision', 'recall', 'accuracy']
+score='accuracy'
+
+print("# Tuning hyper-parameters for %s" % score)
+print()
+
+clf = GridSearchCV(SVC(C=1), tuned_parameters, cv=cross_validation.StratifiedKFold(y_train,20,shuffle=True), scoring=score)
+clf.fit(X_train, y_train)
+
+print("Best parameters set found on development set:")
+print()
+print(clf.best_estimator_)
+print()
+print("Grid scores on development set:")
+print()
+for params, mean_score, scores in clf.grid_scores_:
+    print("%0.3f (+/-%0.03f) for %r"
+          % (mean_score, scores.std() / 2, params))
+
+print()
+
+print("Detailed classification report:")
+print()
+print("The model is trained on the full development set.")
+print("The scores are computed on the full evaluation set.")
+print()
+y_true, y_pred = y_test, clf.predict(X_test)
+target_names = authorList
+print(classification_report(y_true, y_pred,target_names=target_names))
+print()
